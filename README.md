@@ -1,7 +1,3 @@
-Below is an example of a detailed README file for the repository. You can save this as `README.md` at the root of your repository.
-
----
-
 # Stereo Visual Odometry
 
 Visual odometry with bundle adjustment for stereo sequences of the KITTI dataset.
@@ -135,5 +131,3 @@ For other operating systems, please refer to the corresponding installation guid
 3. **Review Outputs:**
 
    Check the `outputs/` folder to analyze the results of the visual odometry process. The saved images can help in verifying feature detections and pose estimation quality.
-
-## Note
