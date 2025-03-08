@@ -3,8 +3,8 @@
 directory_datatype create_directories(std::string directory_path = "..") 
 {
     directory_datatype directories;
-    directories.read_directory_path_1 = directory_path + "/data/images_left/";
-    directories.read_directory_path_2 = directory_path + "/data/images_right/";
+    directories.read_directory_path_1 = directory_path + "/data/images_left_7/";
+    directories.read_directory_path_2 = directory_path + "/data/images_right_7/";
     directories.save_directory_path = directory_path + "/debug/images/";
     directories.detections_directory_path = directory_path + "/debug/images/detections/";
     directories.matches_directory_path = directory_path + "/debug/images/matches/";

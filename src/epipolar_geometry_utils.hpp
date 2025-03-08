@@ -5,48 +5,43 @@ cv::Mat find_fundamental_matrix(match_datatype& match_data)
     std::vector<cv::Point2f> points1, points2;
     for (int i = 0; i < match_data.matches.size(); i++) 
     {
-        points1.push_back(match_data.keypoints1[match_data.matches[i][0].queryIdx].pt);
-        points2.push_back(match_data.keypoints2[match_data.matches[i][0].trainIdx].pt);
+        points1.push_back(match_data.keypoints1[match_data.matches[i].queryIdx].pt);
+        points2.push_back(match_data.keypoints2[match_data.matches[i].trainIdx].pt);
     }
     cv::Mat fundamental_matrix = cv::findFundamentalMat(points1, points2, cv::FM_RANSAC, 3, 0.9);
-
+    
     cv::SVD svd(fundamental_matrix);
     cv::Mat W = cv::Mat::zeros(3, 3, CV_64F);
     W.at<double>(0, 0) = svd.w.at<double>(0, 0);
     W.at<double>(1, 1) = svd.w.at<double>(1, 0);
 
-    // std::cout << "Fundamental Matrix: " << std::endl << fundamental_matrix << std::endl;
-
     cv::Mat fundamental_matrix_clean = svd.u * W * svd.vt;
-    // std::cout << "Fundamental Matrix Clean: " << std::endl << fundamental_matrix_clean << std::endl;
 
-    // remove outliers based on fundamental matrix and update keypoints and points2f
+    // Remove outliers based on fundamental matrix
     std::vector<cv::Point2f> points1_inliers, points2_inliers;
-    std::vector<std::vector<cv::DMatch>> matches_inliers;
+    std::vector<cv::DMatch> matches_inliers;  // Changed type
+
     for (int i = 0; i < points1.size(); i++) 
     {
         cv::Mat point1 = (cv::Mat_<double>(3, 1) << points1[i].x, points1[i].y, 1);
         cv::Mat point2 = (cv::Mat_<double>(3, 1) << points2[i].x, points2[i].y, 1);
         cv::Mat epipolar_line = fundamental_matrix_clean * point1;
         double error = point2.dot(epipolar_line);
-        if (std::abs(error) < 0.05) 
+        if (std::abs(error) < 2) 
         {
             points1_inliers.push_back(points1[i]);
             points2_inliers.push_back(points2[i]);
-            // Update matches_inliers
             matches_inliers.push_back(match_data.matches[i]);
         }
     }
 
-    // cv::Mat fundamental_matrix_clean_inliers = cv::findFundamentalMat(points1_inliers, points2_inliers, cv::FM_8POINT);
-
-    // update match_data with inliers
     match_data.points2f_1 = points1_inliers;
     match_data.points2f_2 = points2_inliers;
     match_data.matches = matches_inliers;
 
     return fundamental_matrix_clean;
 }
+
 
 cv::Mat find_essential_matrix(const cv::Mat &fundamental_matrix, const cv::Mat &k_matrix) 
 {
@@ -84,20 +79,8 @@ void triangulate_and_store(match_datatype &match_data, const cv::Mat &projMat1, 
 
         point_data.viewing_direction = cv::Vec3f(point_data.point3D.x, point_data.point3D.y, point_data.point3D.z);
 
-        int best_idx = -1;
-        int min_distance = INT_MAX;
-        for (size_t j = 0; j < match_data.matches[i].size(); j++)
-        {
-            int query_idx = match_data.matches[i][j].queryIdx;
-            int train_idx = match_data.matches[i][j].trainIdx;
-            int distance = match_data.matches[i][j].distance;
-
-            if (distance < min_distance)
-            {
-                min_distance = distance;
-                best_idx = train_idx;
-            }
-        }
+        // Find best descriptor index based on match distance
+        int best_idx = match_data.matches[i].trainIdx;
 
         point_data.best_descriptor_idx = best_idx;
 

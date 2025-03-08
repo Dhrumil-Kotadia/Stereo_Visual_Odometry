@@ -15,8 +15,9 @@ struct directory_datatype
 struct im_tools
 {
     cv::Ptr<cv::Feature2D> detector = cv::ORB::create(500);
-    cv::Ptr<cv::StereoBM> stereo = cv::StereoBM::create(16, 21);
-    cv::Ptr<cv::DescriptorMatcher> matcher = cv::DescriptorMatcher::create(cv::DescriptorMatcher::BRUTEFORCE_HAMMING);
+    cv::Ptr<cv::StereoSGBM> stereo = cv::StereoSGBM::create(0, 32, 11, 11*11*8, 11*11*32);
+    cv::Ptr<cv::DescriptorMatcher> bf_matcher = cv::DescriptorMatcher::create(cv::DescriptorMatcher::BRUTEFORCE_HAMMING);
+    cv::Ptr<cv::DescriptorMatcher> flann_matcher = cv::DescriptorMatcher::create(cv::DescriptorMatcher::FLANNBASED);
 };
 
 struct point3D_datatype
@@ -33,7 +34,8 @@ struct match_datatype
     cv::Mat img2 = {};
     std::vector<cv::KeyPoint> keypoints1 = {};
     std::vector<cv::KeyPoint> keypoints2 = {};
-    std::vector<std::vector<cv::DMatch>> matches = {};
+    std::vector<std::vector<cv::DMatch>> knn_matches = {};
+    std::vector<cv::DMatch> matches = {};
     std::vector<cv::Point2f> points2f_1 = {};
     std::vector<cv::Point2f> points2f_2 = {};
     cv::Mat descriptors1 = {};

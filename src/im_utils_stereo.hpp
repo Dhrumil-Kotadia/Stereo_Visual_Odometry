@@ -47,6 +47,60 @@ feature_datatype extract_features(const cv::Mat img, cv::Ptr<cv::Feature2D> dete
     return features;
 }
 
+feature_datatype extract_features_grid(const cv::Mat img, cv::Ptr<cv::Feature2D> detector) 
+{
+    std::vector<cv::KeyPoint> keypoints;
+    cv::Mat descriptors;
+
+    // Define grid parameters
+    int grid_x = 4, grid_y = 4; // Divide image into 4x4 grid (adjust as needed)
+    int max_features_per_cell = 80; // Adjust this to control the number of features per grid cell
+    int cell_width = img.cols / grid_x;
+    int cell_height = img.rows / grid_y;
+
+    std::vector<cv::KeyPoint> all_keypoints;
+    
+    // Process each grid cell separately
+    for (int i = 0; i < grid_x; i++) {
+        for (int j = 0; j < grid_y; j++) {
+            // Define cell ROI
+            cv::Rect cell(i * cell_width, j * cell_height, cell_width, cell_height);
+            cv::Mat cell_img = img(cell);
+
+            // Detect features in the cell
+            std::vector<cv::KeyPoint> cell_keypoints;
+            detector->detect(cell_img, cell_keypoints);
+
+            // Adjust keypoint coordinates to be relative to the whole image
+            for (auto &kp : cell_keypoints) {
+                kp.pt.x += i * cell_width;
+                kp.pt.y += j * cell_height;
+            }
+
+            // Apply Non-Maximum Suppression (sort by response and keep top N)
+            std::sort(cell_keypoints.begin(), cell_keypoints.end(), 
+                      [](const cv::KeyPoint &a, const cv::KeyPoint &b) { return a.response > b.response; });
+
+            if (cell_keypoints.size() > max_features_per_cell) {
+                cell_keypoints.resize(max_features_per_cell); // Keep only top features
+            }
+
+            all_keypoints.insert(all_keypoints.end(), cell_keypoints.begin(), cell_keypoints.end());
+        }
+    }
+
+    // Compute descriptors only for selected keypoints
+    detector->compute(img, all_keypoints, descriptors);
+
+    feature_datatype features;
+    features.img = img;
+    features.keypoints = all_keypoints;
+    features.descriptors = descriptors;
+
+    return features;
+}
+
+
 cv::Mat draw_keypoints(match_datatype match_data) 
 {
     cv::Mat out;
@@ -69,10 +123,39 @@ cv::Mat draw_valid_detections(match_datatype match_data, cv::Mat img)
 
 match_datatype match_features(const cv::Mat img1, const cv::Mat img2, im_tools tools) 
 {
-    feature_datatype feature_data_1 = extract_features(img1, tools.detector);
-    feature_datatype feature_data_2 = extract_features(img2, tools.detector);
-    std::vector<std::vector<cv::DMatch>> matches;
-    tools.matcher->knnMatch(feature_data_1.descriptors, feature_data_2.descriptors, matches, 3000);
+    feature_datatype feature_data_1 = extract_features_grid(img1, tools.detector);
+    feature_datatype feature_data_2 = extract_features_grid(img2, tools.detector);
+    std::vector<cv::DMatch> matches;
+    std::vector<cv::DMatch> inlier_matches;
+    tools.bf_matcher->match(feature_data_1.descriptors, feature_data_2.descriptors, matches);
+    std::cout << "num_matches: " << matches.size() << std::endl;
+    //  Lowe's ratio test
+    // double ratio = 0.7;
+    // std::vector<cv::DMatch> good_matches;
+    // for (auto &match : matches) {
+    //     if (match.distance < ratio * matches[1].distance) {
+    //         good_matches.push_back(match);
+    //     }
+    // }
+    matches = good_matches;
+
+    std::cout << "num_good_matches: " << matches.size() << std::endl;
+
+    std::vector<cv::Point2f> pts1, pts2;
+    for (auto& match : matches) {
+        pts1.push_back(feature_data_1.keypoints[match.queryIdx].pt);
+        pts2.push_back(feature_data_2.keypoints[match.trainIdx].pt);
+    }
+    
+    cv::Mat mask;
+    cv::findHomography(pts1, pts2, cv::RANSAC, 7.0, mask);
+    
+    for (size_t i = 0; i < matches.size(); i++) {
+        if (mask.at<uchar>(i)) {
+            inlier_matches.push_back(matches[i]);
+        }
+    }
+    matches = inlier_matches;
 
     match_datatype result;
     result.img1 = img1;
@@ -147,14 +230,23 @@ bool is_new_keyframe(match_datatype match_data, Keyframe keyframe, int threshold
     return count > threshold;
 }
 
-cv::Mat get_projection_matrix_for_keyframe(Keyframe keyframe, cv::Mat k_matrix) 
+void get_projection_matrix_for_keyframe(Keyframe keyframe, cv::Mat k_matrix, cv::Mat &projection_matrix_1, cv::Mat &projection_matrix_2) 
 {
-    cv::Mat projection_matrix;
-
-    // cv::hconcat(cv::Mat::eye(3,3,CV_64F), -keyframe.translation, projection_matrix);
-    // projection_matrix = keyframe.rotation * projection_matrix;
-    cv::hconcat(keyframe.rotation, keyframe.translation, projection_matrix);
-    projection_matrix = k_matrix * projection_matrix;
+    cv::Mat temp_k;
+    cv::Mat rot, trans;
+    cv::Mat proj_mat;
     
-    return projection_matrix;
+    cv::decomposeProjectionMatrix(projection_matrix_1, temp_k, rot, trans);
+    trans = trans.rowRange(0, 3) / trans.at<double>(3);
+    rot = rot * keyframe.rotation;
+    trans = trans + rot * keyframe.translation;
+    cv::hconcat(keyframe.rotation, keyframe.translation, proj_mat);
+    projection_matrix_1 = k_matrix * proj_mat;
+
+    cv::decomposeProjectionMatrix(projection_matrix_2, temp_k, rot, trans);
+    trans = trans.rowRange(0, 3) / trans.at<double>(3);
+    rot = rot * keyframe.rotation;
+    trans = trans + rot * keyframe.translation;
+    cv::hconcat(keyframe.rotation, keyframe.translation, proj_mat);
+    projection_matrix_2 = k_matrix * proj_mat;
 }

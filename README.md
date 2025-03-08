@@ -5,7 +5,7 @@ Visual odometry with bundle adjustment for stereo sequences of the KITTI dataset
 This project implements a stereo visual odometry pipeline that processes stereo image sequences from the KITTI dataset. It computes disparity maps, performs feature matching and triangulation, and refines camera poses using bundle adjustment.
 
 <p align="center">
- <img src="outputs/odometry_cropped.gif" width = "350"/>
+ <img src="outputs/odometry.gif" width = "350"/>
 </p>
 
 ---
